@@ -8,7 +8,7 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://lh3.googleusercontent.com/d/1y6cH1JakChxAwxdnWV9xiUCa29d4CmO8",
+      "src": "./icon-sekolah.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
