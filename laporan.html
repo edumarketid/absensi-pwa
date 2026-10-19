@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laporan Rekap Presensi Siswa</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- SUPABASE JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; font-size: 11pt; }
+      .page-break { page-break-after: always; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen font-sans text-gray-800 p-4 sm:p-6">
+
+  <div class="max-w-5xl mx-auto space-y-6">
+    
+    <!-- PANEL FILTER (NO PRINT) -->
+    <div class="bg-white p-5 rounded-2xl shadow-md border border-gray-200 space-y-4 no-print">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h1 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-file-invoice text-blue-600"></i> Laporan & Rekap Presensi
+        </h1>
+        <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow transition">
+          <i class="fa-solid fa-print"></i> Cetak Laporan
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Jenis Rekap</label>
+          <select id="filter-type" onchange="toggleFilterType()" class="w-full p-2 bg-slate-50 border rounded-xl text-xs font-semibold">
+            <option value="DAILY">Harian</option>
+            <option value="MONTHLY" selected>Bulanan</option>
+          </select>
+        </div>
+
+        <div id="box-date" class="hidden">
+          <label class="block text-xs font-bold text-gray-600 mb-1">Tanggal</label>
+          <input type="date" id="filter-date" class="w-full p-2 bg-slate-50 border rounded-xl text-xs font-semibold">
+        </div>
+
+        <div id="box-month">
+          <label class="block text-xs font-bold text-gray-600 mb-1">Bulan & Tahun</label>
+          <input type="month" id="filter-month" class="w-full p-2 bg-slate-50 border rounded-xl text-xs font-semibold">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Filter Kelas</label>
+          <select id="filter-kelas" class="w-full p-2 bg-slate-50 border rounded-xl text-xs font-semibold">
+            <option value="ALL">Semua Kelas</option>
+          </select>
+        </div>
+      </div>
+
+      <button onclick="generateReport()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow">
+        <i class="fa-solid fa-magnifying-glass"></i> Tampilkan Laporan
+      </button>
+    </div>
+
+    <!-- AREA LAPORAN KOP & TABEL (UNTUK DICETAK) -->
+    <div id="report-paper" class="bg-white p-8 rounded-2xl shadow-lg border border-gray-200 space-y-6">
+      
+      <!-- KOP SURAT -->
+      <div class="border-b-4 border-double border-gray-800 pb-4 text-center relative">
+        <h2 id="kop-school-name" class="text-xl font-black uppercase tracking-wide text-gray-900">SMK NEGERI 1 WAKATOBI</h2>
+        <p id="kop-sub-info" class="text-xs text-gray-600 mt-0.5">REKAPITULASI PRESENSI KEHADIRAN SISWA</p>
+        <p id="kop-period" class="text-xs font-bold text-blue-900 mt-1">Periode: -</p>
+      </div>
+
+      <!-- STATUS LOADING -->
+      <div id="report-loading" class="text-center py-10 hidden">
+        <i class="fa-solid fa-spinner fa-spin text-3xl text-blue-600 mb-2"></i>
+        <p class="text-xs text-gray-500 font-semibold">Mengambil data dari Supabase...</p>
+      </div>
+
+      <!-- HASIL TABEL LAPORAN -->
+      <div id="report-content" class="overflow-x-auto">
+        <div class="text-center text-xs text-gray-400 py-8">Klik "Tampilkan Laporan" untuk memuat data rekap.</div>
+      </div>
+
+      <!-- TANDA TANGAN KEPALA SEKOLAH -->
+      <div class="grid grid-cols-2 gap-4 pt-8 text-xs">
+        <div></div>
+        <div class="text-center space-y-12">
+          <div>
+            <p id="ttd-date">Wakatobi, -</p>
+            <p class="font-bold">Kepala Sekolah</p>
+          </div>
+          <div>
+            <p id="ttd-headmaster-name" class="font-bold underline uppercase">-</p>
+            <p id="ttd-headmaster-nip" class="text-gray-600">NIP. -</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    // SUPABASE CLIENT INITIALIZATION
+    const SUPABASE_URL = "https://nbwpnhshhpfqtmbwewgk.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5id3BuaHNoaHBmcXRtYndld2drIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0MTQ1ODUsImV4cCI6MjEwNzk5MDU4NX0.2Ah6o8svWPMDEI1O3zOxytNyqBIjED7GXTxowNm1Ai4";
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let masterStudents = [];
+
+    window.onload = async () => {
+      const d = new Date();
+      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+      document.getElementById('filter-month').value = monthStr;
+      document.getElementById('filter-date').value = todayStr;
+
+      await loadSchoolIdentity();
+      await loadClassDropdown();
+    };
+
+    function toggleFilterType() {
+      const type = document.getElementById('filter-type').value;
+      if (type === 'DAILY') {
+        document.getElementById('box-date').classList.remove('hidden');
+        document.getElementById('box-month').classList.add('hidden');
+      } else {
+        document.getElementById('box-date').classList.add('hidden');
+        document.getElementById('box-month').classList.remove('hidden');
+      }
+    }
+
+    async function loadSchoolIdentity() {
+      try {
+        const { data } = await supabaseClient.from('pengaturan').select('*');
+        if (data) {
+          const cfg = {};
+          data.forEach(item => cfg[item.kunci] = item.nilai);
+
+          const schoolName = cfg.SCHOOL_NAME || localStorage.getItem("SCHOOL_NAME") || "SMK NEGERI 1 WAKATOBI";
+          const principalName = cfg.PRINCIPAL_NAME || localStorage.getItem("PRINCIPAL_NAME") || "-";
+          const principalNip = cfg.PRINCIPAL_NIP || localStorage.getItem("PRINCIPAL_NIP") || "-";
+
+          document.getElementById('kop-school-name').innerText = schoolName.toUpperCase();
+          document.getElementById('ttd-headmaster-name').innerText = principalName;
+          document.getElementById('ttd-headmaster-nip').innerText = `NIP. ${principalNip}`;
+
+          const todayLocal = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+          document.getElementById('ttd-date').innerText = `Wakatobi, ${todayLocal}`;
+        }
+      } catch (e) {
+        console.error("Gagal memuat identitas sekolah:", e);
+      }
+    }
+
+    async function loadClassDropdown() {
+      try {
+        const { data } = await supabaseClient.from('siswa').select('kelas').eq('active', true);
+        if (data) {
+          const classes = [...new Set(data.map(s => s.kelas))].filter(Boolean).sort();
+          const select = document.getElementById('filter-kelas');
+          select.innerHTML = '<option value="ALL">Semua Kelas</option>' + classes.map(c => `<option value="${c}">${c}</option>`).join('');
+        }
+      } catch (e) {
+        console.error("Gagal memuat daftar kelas:", e);
+      }
+    }
+
+    async function generateReport() {
+      const reportType = document.getElementById('filter-type').value;
+      const selectedClass = document.getElementById('filter-kelas').value;
+      const loadingEl = document.getElementById('report-loading');
+      const contentEl = document.getElementById('report-content');
+
+      loadingEl.classList.remove('hidden');
+      contentEl.innerHTML = '';
+
+      try {
+        // Fetch Master Siswa
+        let querySiswa = supabaseClient.from('siswa').select('*').eq('active', true);
+        if (selectedClass !== 'ALL') {
+          querySiswa = querySiswa.eq('kelas', selectedClass);
+        }
+        const { data: students } = await querySiswa;
+        masterStudents = students || [];
+
+        if (reportType === 'DAILY') {
+          const targetDate = document.getElementById('filter-date').value;
+          document.getElementById('kop-period').innerText = `PERIODE HARIAN: ${targetDate}`;
+
+          const { data: attendance } = await supabaseClient
+            .from('absensi_harian')
+            .select('*')
+            .eq('tanggal', targetDate);
+
+          renderDailyTable(masterStudents, attendance || []);
+        } else {
+          const targetMonth = document.getElementById('filter-month').value; // YYYY-MM
+          const year = targetMonth.split('-')[0];
+          const month = targetMonth.split('-')[1];
+
+          document.getElementById('kop-period').innerText = `PERIODE BULANAN: ${month} / ${year}`;
+
+          // Range tanggal dalam satu bulan
+          const startDate = `${targetMonth}-01`;
+          const endDate = `${targetMonth}-31`;
+
+          const { data: attendance } = await supabaseClient
+            .from('absensi_harian')
+            .select('*')
+            .gte('tanggal', startDate)
+            .lte('tanggal', endDate);
+
+          renderMonthlyTable(masterStudents, attendance || []);
+        }
+      } catch (err) {
+        contentEl.innerHTML = `<div class="text-center text-xs text-red-500 py-6">Gagal membuat laporan: ${err.message}</div>`;
+      } finally {
+        loadingEl.classList.add('hidden');
+      }
+    }
+
+    function renderDailyTable(students, attendance) {
+      const container = document.getElementById('report-content');
+      if (students.length === 0) {
+        container.innerHTML = `<div class="text-center text-xs text-gray-500 py-6">Tidak ada data siswa.</div>`;
+        return;
+      }
+
+      let html = `
+        <table class="w-full text-xs border-collapse border border-gray-300">
+          <thead>
+            <tr class="bg-slate-100 text-gray-700 font-bold border-b border-gray-300">
+              <th class="border border-gray-300 p-2 text-center w-10">No</th>
+              <th class="border border-gray-300 p-2 text-left">NISN</th>
+              <th class="border border-gray-300 p-2 text-left">Nama Siswa</th>
+              <th class="border border-gray-300 p-2 text-center">Kelas</th>
+              <th class="border border-gray-300 p-2 text-center">Jam Pagi</th>
+              <th class="border border-gray-300 p-2 text-center">Jam Siang</th>
+              <th class="border border-gray-300 p-2 text-center">Status Akhir</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      students.forEach((s, idx) => {
+        const rec = attendance.find(a => String(a.id_siswa).trim().toUpperCase() === String(s.id_siswa).trim().toUpperCase());
+        const status = rec ? (rec.status_akhir || rec.status_presensi || "HADIR") : "ALPA";
+        const jamPagi = rec ? (rec.jam_pagi || rec.jam || "-") : "-";
+        const jamSiang = rec ? (rec.jam_siang || "-") : "-";
+
+        let badgeClass = "text-gray-700";
+        if (status === "HADIR") badgeClass = "text-emerald-700 font-bold";
+        else if (status === "TERLAMBAT") badgeClass = "text-amber-700 font-bold";
+        else if (status === "ALPA") badgeClass = "text-red-700 font-bold";
+
+        html += `
+          <tr class="border-b border-gray-200 hover:bg-slate-50">
+            <td class="border border-gray-300 p-2 text-center">${idx + 1}</td>
+            <td class="border border-gray-300 p-2">${s.nisn || '-'}</td>
+            <td class="border border-gray-300 p-2 font-semibold">${s.nama}</td>
+            <td class="border border-gray-300 p-2 text-center">${s.kelas}</td>
+            <td class="border border-gray-300 p-2 text-center">${jamPagi}</td>
+            <td class="border border-gray-300 p-2 text-center">${jamSiang}</td>
+            <td class="border border-gray-300 p-2 text-center ${badgeClass}">${status}</td>
+          </tr>
+        `;
+      });
+
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+    }
+
+    function renderMonthlyTable(students, attendance) {
+      const container = document.getElementById('report-content');
+      if (students.length === 0) {
+        container.innerHTML = `<div class="text-center text-xs text-gray-500 py-6">Tidak ada data siswa.</div>`;
+        return;
+      }
+
+      let html = `
+        <table class="w-full text-xs border-collapse border border-gray-300">
+          <thead>
+            <tr class="bg-slate-100 text-gray-700 font-bold border-b border-gray-300">
+              <th class="border border-gray-300 p-2 text-center w-10">No</th>
+              <th class="border border-gray-300 p-2 text-left">Nama Siswa</th>
+              <th class="border border-gray-300 p-2 text-center">Kelas</th>
+              <th class="border border-gray-300 p-2 text-center bg-emerald-50 text-emerald-800">Hadir</th>
+              <th class="border border-gray-300 p-2 text-center bg-amber-50 text-amber-800">Terlambat</th>
+              <th class="border border-gray-300 p-2 text-center bg-indigo-50 text-indigo-800">Izin</th>
+              <th class="border border-gray-300 p-2 text-center bg-blue-50 text-blue-800">Sakit</th>
+              <th class="border border-gray-300 p-2 text-center bg-red-50 text-red-800">Alpa</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      students.forEach((s, idx) => {
+        const studentRecords = attendance.filter(a => String(a.id_siswa).trim().toUpperCase() === String(s.id_siswa).trim().toUpperCase());
+
+        let countHadir = 0, countTerlambat = 0, countIzin = 0, countSakit = 0, countAlpa = 0;
+
+        studentRecords.forEach(r => {
+          const st = String(r.status_akhir || r.status_presensi || "").toUpperCase();
+          if (st === "HADIR") countHadir++;
+          else if (st === "TERLAMBAT") countTerlambat++;
+          else if (st === "IZIN") countIzin++;
+          else if (st === "SAKIT") countSakit++;
+          else if (st === "ALPA") countAlpa++;
+        });
+
+        html += `
+          <tr class="border-b border-gray-200 hover:bg-slate-50">
+            <td class="border border-gray-300 p-2 text-center">${idx + 1}</td>
+            <td class="border border-gray-300 p-2 font-semibold">${s.nama}</td>
+            <td class="border border-gray-300 p-2 text-center">${s.kelas}</td>
+            <td class="border border-gray-300 p-2 text-center font-bold text-emerald-700">${countHadir}</td>
+            <td class="border border-gray-300 p-2 text-center font-bold text-amber-700">${countTerlambat}</td>
+            <td class="border border-gray-300 p-2 text-center font-bold text-indigo-700">${countIzin}</td>
+            <td class="border border-gray-300 p-2 text-center font-bold text-blue-700">${countSakit}</td>
+            <td class="border border-gray-300 p-2 text-center font-bold text-red-700">${countAlpa}</td>
+          </tr>
+        `;
+      });
+
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+    }
+  </script>
+</body>
+</html>

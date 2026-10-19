@@ -1,0 +1,17 @@
+{
+  "name": "Sistem Absensi Murid",
+  "short_name": "AbsensiQR",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b3c5d",
+  "theme_color": "#0b3c5d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://lh3.googleusercontent.com/d/1y6cH1JakChxAwxdnWV9xiUCa29d4CmO8",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
