@@ -234,7 +234,7 @@ async function simpanPengaturan(){
   const tempatTtd = el('tempatTtd').value.trim();
 
   el('statusSimpan').className = 'status';
-  el('statusSimpan').textContent = 'Menyimpan pengaturan ke Supabase...';
+  el('statusSimpan').textContent = 'Menyimpan pengaturan ke Server...';
   
   try {
     const settingsArray = [
@@ -287,7 +287,7 @@ function pilihJenis(j){
 }
 
 async function buatLaporan(){
-  el('loading').textContent = 'Mengambil data laporan dari Supabase...';
+  el('loading').textContent = 'Mengambil data laporan dari Server...';
   const selectedClass = el('kelas').value;
 
   try {
