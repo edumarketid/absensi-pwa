@@ -87,18 +87,26 @@
             </button>
           </div>
         </div>
+
+        <!-- FOOTER QUEUE & TOMBOL KIRIM -->
         <div class="bg-white p-3 border-t border-gray-100 flex items-center justify-between shadow-sm z-20">
-          <div class="flex items-center space-x-3">
-            <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold"><i class="fa-solid fa-bolt text-sm"></i></div>
-            <div>
-              <h4 class="text-xs font-bold text-gray-800">Queue Offline Sync</h4>
-              <p id="sync-info-text" class="text-[10px] text-gray-500">Otomatis sinkron ke Server...</p>
+          <div class="flex items-center space-x-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold flex-shrink-0">
+              <i class="fa-solid fa-bolt text-sm"></i>
+            </div>
+            <div class="min-w-0">
+              <h4 class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                <span>Queue Sync</span>
+                <span id="queue-count" class="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">0</span>
+              </h4>
+              <p id="sync-info-text" class="text-[10px] text-gray-500 truncate">Otomatis sinkron ke Server...</p>
             </div>
           </div>
-          <div class="text-right pl-2 border-l border-gray-200 cursor-pointer" onclick="triggerManualSync()">
-            <span class="text-[10px] text-gray-400 block font-medium">Queue</span>
-            <span id="queue-count" class="text-sm font-extrabold text-gray-800">0</span>
-          </div>
+          
+          <button id="btn-manual-sync" onclick="triggerManualSync()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 active:scale-95 transition flex-shrink-0">
+            <i class="fa-solid fa-paper-plane text-[10px]"></i>
+            <span>Kirim</span>
+          </button>
         </div>
       </main>
 
@@ -1300,7 +1308,7 @@
             nilai: timeSettingsToSave[k]
           }));
           await supabaseClient.from('pengaturan_waktu').upsert(settingsArray);
-          alert("Pengaturan jam tersimpan di Server!");
+          alert("Pengaturan jam tersimpan di Supabase!");
         } catch (e) { alert("Pengaturan tersimpan lokal."); }
       } else alert("Perangkat offline. Tersimpan di HP ini.");
     }
@@ -1339,16 +1347,12 @@
       }
 
       try {
-        // 1. Ambil Data Master Siswa
         const { data: studentsData } = await supabaseClient.from('siswa').select('*');
-
-        // 2. Ambil Data Absensi Harian berdasarkan TANGGAL (support huruf besar/kecil)
         const { data: attendanceData } = await supabaseClient
           .from('absensi_harian')
           .select('*')
           .eq('TANGGAL', targetDateStr);
 
-        // 3. Ambil Konfigurasi Waktu
         const { data: timeData } = await supabaseClient.from('pengaturan_waktu').select('*');
         if (timeData && Array.isArray(timeData)) {
           const timeObj = {};
@@ -1360,7 +1364,6 @@
           applyTimeSettingsFromCloud(timeObj);
         }
 
-        // 4. Ambil Pengaturan Identitas Sekolah
         const { data: configData } = await supabaseClient.from('pengaturan').select('*');
         if (configData && Array.isArray(configData)) {
           const cfgMap = {};
@@ -1376,7 +1379,6 @@
           document.getElementById("app-header-school-name").innerText = `${schoolName} (${academicYear})`;
         }
 
-        // 5. Simpan Data Siswa ke Local Cache (IndexedDB)
         if (studentsData && Array.isArray(studentsData)) {
           const normalizedStudents = studentsData.map(s => {
             const id = s.ID_SISWA || s.id_siswa;
@@ -1414,7 +1416,6 @@
           }
         }
 
-        // 6. Petakan Data Absensi ke Format Lokal PWA
         if (attendanceData && Array.isArray(attendanceData)) {
           fetchedTodayAttendance = attendanceData.map(a => {
             const tgl = formatCleanDateLocal(a.TANGGAL || a.tanggal || targetDateStr);
@@ -1440,12 +1441,11 @@
           fetchedTodayAttendance = [];
         }
 
-        // Refresh Tampilan UI Monitoring & Dashboard
         updateMonitoringDashboard();
         renderDashboardView();
 
       } catch (e) {
-        console.error("Gagal memuat data dari Server:", e);
+        console.error("Gagal memuat data dari Supabase:", e);
         loadLocalHistoryToMemory();
       }
     }
@@ -1695,9 +1695,9 @@
                 });
 
               if (!error) {
-                alert("Perubahan data siswa berhasil disimpan ke Server!");
+                alert("Perubahan data siswa berhasil disimpan ke Supabase!");
               } else {
-                alert("Gagal memperbarui Server: " + error.message);
+                alert("Gagal memperbarui Supabase: " + error.message);
               }
             } catch (e) {
               alert("Data tersimpan lokal.");
@@ -2798,9 +2798,30 @@
       getAllQueueFromDB().then(recs => { document.getElementById('queue-count').innerText = recs.length; });
     }
 
+    async function triggerManualSync() {
+      if (!navigator.onLine) {
+        alert("Perangkat sedang Offline. Pastikan koneksi internet terhubung untuk mengirim antrean!");
+        return;
+      }
+      
+      const btnSync = document.getElementById("btn-manual-sync");
+      const originalHTML = btnSync.innerHTML;
+      
+      btnSync.disabled = true;
+      btnSync.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-[10px]"></i><span>Mengirim...</span>`;
+      
+      await syncQueueToGAS();
+      
+      btnSync.disabled = false;
+      btnSync.innerHTML = originalHTML;
+    }
+
     async function syncQueueToGAS() {
       const queueData = await getAllQueueFromDB();
-      if (queueData.length === 0) return;
+      if (queueData.length === 0) {
+        document.getElementById("sync-info-text").innerText = "Antrean kosong (semua data tersimpan).";
+        return;
+      }
 
       try {
         const payload = queueData.map(q => ({
@@ -2822,14 +2843,22 @@
           const tx = db.transaction("attendance_queue", "readwrite");
           const store = tx.objectStore("attendance_queue");
           queueData.forEach(q => store.delete(q.queue_id));
-          tx.oncomplete = () => updateQueueCountUI();
+          
+          tx.oncomplete = () => {
+            updateQueueCountUI();
+            document.getElementById("sync-info-text").innerText = "Berhasil terkirim ke Server!";
+            alert(`Berhasil mengirim ${queueData.length} data presensi ke Supabase!`);
+          };
+        } else {
+          console.error("Supabase Error:", error);
+          alert("Gagal mengirim ke Supabase: " + error.message);
+          document.getElementById("sync-info-text").innerText = "Gagal sinkron. Cek RLS / Koneksi.";
         }
       } catch (e) {
-        console.error("Gagal sinkron ke Server:", e);
+        console.error("Gagal sinkron ke Supabase:", e);
+        alert("Terjadi kesalahan saat pengiriman data.");
       }
     }
-
-    function triggerManualSync() { if (navigator.onLine) syncQueueToGAS(); }
 
     setInterval(() => {
       const isOnline = navigator.onLine;
