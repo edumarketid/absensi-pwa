@@ -1831,7 +1831,7 @@
       container.innerHTML = filtered.map(std => {
         const rec = rawRecords.find(r => String(r.id_siswa).trim().toUpperCase() === String(std.id_siswa).trim().toUpperCase());
         const status = rec ? String(rec.status_akhir || rec.status_presensi || "HADIR").toUpperCase() : "ALPA";
-        const jamScan = rec ? (rec.jam || rec.jam_pagi || "-") : "-";
+        const jamScan = rec ? (rec.jam_pagi || rec.jam_siang || rec.jam || "-") : "-";
 
         let badgeStyle = "bg-gray-100 text-gray-700";
         if (status === "HADIR") badgeStyle = "bg-emerald-100 text-emerald-800";
@@ -1869,7 +1869,7 @@
       if (rec) {
         contentEl.innerHTML = `
           <p>Tanggal: <b>${rec.tanggal}</b></p>
-          <p>Jam Scan: <b>${rec.jam || rec.jam_pagi || '-'}</b></p>
+          <p>Jam Pagi: <b>${rec.jam_pagi || '-'}</b> | Jam Siang: <b>${rec.jam_siang || '-'}</b></p>
           <p>Status Pagi: <b>${rec.status_pagi || '-'}</b> | Status Siang: <b>${rec.status_siang || '-'}</b></p>
           <p>Status Akhir Presensi: <b class="text-blue-700">${rec.status_akhir || rec.status_presensi || 'HADIR'}</b></p>
         `;
@@ -1919,19 +1919,17 @@
       const isPastSiangLimit = (targetDate < todayFormatted) || (targetDate === todayFormatted && nowStr >= (timeConfig.sLimit + ":01"));
 
       classStudents.forEach(std => {
-        const studentRecords = rawRecords.filter(r => 
+        const stdRec = rawRecords.find(r => 
           String(r.id_siswa).trim().toUpperCase() === String(std.id_siswa).trim().toUpperCase() &&
           formatCleanDateLocal(r.tanggal) === targetDate
         );
 
-        const stdRec = studentRecords.find(r => r.sesi === selectedSessionFilter) || studentRecords[0];
-        
         var targetStatus = "";
         if (stdRec) {
           if (selectedSessionFilter === "PAGI") {
             targetStatus = String(stdRec.status_pagi || stdRec.status_presensi || stdRec.status_akhir || "").toUpperCase();
           } else if (selectedSessionFilter === "SIANG") {
-            targetStatus = String(stdRec.status_siang || (stdRec.sesi === "SIANG" ? (stdRec.status_presensi || stdRec.status_akhir) : "") || "").toUpperCase();
+            targetStatus = String(stdRec.status_siang || stdRec.status_presensi || stdRec.status_akhir || "").toUpperCase();
           }
         }
 
@@ -1990,17 +1988,16 @@
         let countHadirVal = 0;
         
         studentsInCls.forEach(std => {
-          const studentRecords = attendanceRecords.filter(r => 
+          const stdRec = attendanceRecords.find(r => 
             String(r.id_siswa).trim().toUpperCase() === String(std.id_siswa).trim().toUpperCase()
           );
-          const stdRec = studentRecords.find(r => r.sesi === selectedSessionFilter) || studentRecords[0];
 
           if (stdRec) {
             var st = "";
             if (selectedSessionFilter === "PAGI") {
               st = String(stdRec.status_pagi || stdRec.status_presensi || stdRec.status_akhir || "").toUpperCase();
             } else if (selectedSessionFilter === "SIANG") {
-              st = String(stdRec.status_siang || (stdRec.sesi === "SIANG" ? (stdRec.status_presensi || stdRec.status_akhir) : "") || "").toUpperCase();
+              st = String(stdRec.status_siang || stdRec.status_presensi || stdRec.status_akhir || "").toUpperCase();
             }
             
             if (st === "HADIR" || st === "TERLAMBAT") countHadirVal++;
@@ -2113,19 +2110,42 @@
       const selectedSessionFilter = document.getElementById('monitoring-session-filter').value || "PAGI";
       const cleanTargetDate = formatCleanDateLocal(targetDate);
       const timeStr = padZeroTime((isManualTimeMode && customScanTimeOverride) ? customScanTimeOverride : new Date().toTimeString().split(' ')[0].substring(0, 5));
-      
+      const queueId = `${cleanTargetDate}_${idSiswa}`;
+
+      let existing = fetchedTodayAttendance.find(r => 
+        String(r.id_siswa).trim().toUpperCase() === String(idSiswa).trim().toUpperCase() && 
+        formatCleanDateLocal(r.tanggal) === cleanTargetDate
+      );
+
+      let jamPagi = existing ? (existing.jam_pagi || "") : "";
+      let statusPagi = existing ? (existing.status_pagi || "") : "";
+      let jamSiang = existing ? (existing.jam_siang || "") : "";
+      let statusSiang = existing ? (existing.status_siang || "") : "";
+
+      if (selectedSessionFilter === "PAGI") {
+        jamPagi = timeStr;
+        statusPagi = status;
+      } else {
+        jamSiang = timeStr;
+        statusSiang = status;
+      }
+
+      const statusAkhir = status;
+
       const record = {
-        queue_id: `${cleanTargetDate}_${idSiswa}_${selectedSessionFilter}`,
+        queue_id: queueId,
         tanggal: cleanTargetDate,
         jam: timeStr,
         id_siswa: idSiswa,
         nama: student.nama,
         kelas: student.kelas,
         sesi: selectedSessionFilter,
-        status_presensi: status,
-        status_manual: status,
-        status_pagi: selectedSessionFilter === "PAGI" ? status : "",
-        status_siang: selectedSessionFilter === "SIANG" ? status : "",
+        status_presensi: statusAkhir,
+        status_pagi: statusPagi,
+        jam_pagi: jamPagi,
+        status_siang: statusSiang,
+        jam_siang: jamSiang,
+        status_akhir: statusAkhir,
         timestamp: Date.now()
       };
 
@@ -2134,8 +2154,7 @@
       
       fetchedTodayAttendance = fetchedTodayAttendance.filter(r => !(
         String(r.id_siswa).trim().toUpperCase() === String(idSiswa).trim().toUpperCase() && 
-        formatCleanDateLocal(r.tanggal) === cleanTargetDate &&
-        (r.sesi || "PAGI") === selectedSessionFilter
+        formatCleanDateLocal(r.tanggal) === cleanTargetDate
       ));
       fetchedTodayAttendance.push(record);
 
@@ -2712,22 +2731,57 @@
             return;
           }
 
+          const queueId = `${dateStr}_${student.id_siswa}`;
+
+          let existing = fetchedTodayAttendance.find(r => 
+            String(r.id_siswa).trim().toUpperCase() === String(student.id_siswa).trim().toUpperCase() && 
+            formatCleanDateLocal(r.tanggal) === dateStr
+          );
+
+          let jamPagi = existing ? (existing.jam_pagi || "") : "";
+          let statusPagi = existing ? (existing.status_pagi || "") : "";
+          let jamSiang = existing ? (existing.jam_siang || "") : "";
+          let statusSiang = existing ? (existing.status_siang || "") : "";
+
+          if (currentScanSession === "PAGI") {
+            jamPagi = timeStr;
+            statusPagi = computedStatus;
+          } else if (currentScanSession === "SIANG") {
+            jamSiang = timeStr;
+            statusSiang = computedStatus;
+          }
+
+          let statusAkhir = computedStatus;
+          if (existing && existing.status_pagi && currentScanSession === "SIANG") {
+            statusAkhir = existing.status_pagi;
+          }
+
           const record = {
-            queue_id: `${dateStr}_${student.id_siswa}_${currentScanSession}`,
+            queue_id: queueId,
             tanggal: dateStr, 
             jam: timeStr, 
             id_siswa: student.id_siswa,
             nama: student.nama, 
             kelas: student.kelas, 
             sesi: currentScanSession,
-            status_presensi: computedStatus, 
-            status_pagi: currentScanSession === "PAGI" ? computedStatus : "",
-            status_siang: currentScanSession === "SIANG" ? computedStatus : "",
+            status_presensi: statusAkhir, 
+            status_pagi: statusPagi,
+            jam_pagi: jamPagi,
+            status_siang: statusSiang,
+            jam_siang: jamSiang,
+            status_akhir: statusAkhir,
             timestamp: Date.now()
           };
           
           await saveToAttendanceQueue(record);
           await saveToLocalHistoryDB(record);
+
+          fetchedTodayAttendance = fetchedTodayAttendance.filter(r => !(
+            String(r.id_siswa).trim().toUpperCase() === String(student.id_siswa).trim().toUpperCase() && 
+            formatCleanDateLocal(r.tanggal) === dateStr
+          ));
+          fetchedTodayAttendance.push(record);
+
           if (navigator.onLine) syncQueueToGAS();
 
           document.getElementById('res-nama').innerText = student.nama;
@@ -2830,14 +2884,14 @@
           ID_SISWA: q.id_siswa,
           NAMA_SISWA: q.nama,
           KELAS: q.kelas,
-          JAM_PAGI: q.sesi === "PAGI" ? q.jam : null,
-          STATUS_PAGI: q.sesi === "PAGI" ? q.status_presensi : null,
-          JAM_SIANG: q.sesi === "SIANG" ? q.jam : null,
-          STATUS_SIANG: q.sesi === "SIANG" ? q.status_presensi : null,
-          STATUS_AKHIR: q.status_presensi
+          JAM_PAGI: q.jam_pagi || (q.sesi === "PAGI" ? q.jam : null),
+          STATUS_PAGI: q.status_pagi || (q.sesi === "PAGI" ? q.status_presensi : null),
+          JAM_SIANG: q.jam_siang || (q.sesi === "SIANG" ? q.jam : null),
+          STATUS_SIANG: q.status_siang || (q.sesi === "SIANG" ? q.status_presensi : null),
+          STATUS_AKHIR: q.status_akhir || q.status_presensi
         }));
 
-        const { error } = await supabaseClient.from('absensi_harian').upsert(payload);
+        const { error } = await supabaseClient.from('absensi_harian').upsert(payload, { onConflict: 'LOG_ID' });
 
         if (!error) {
           const tx = db.transaction("attendance_queue", "readwrite");
