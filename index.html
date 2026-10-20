@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b3c5d">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Sistem Absensi Murid - v2.63 Supabase Engine</title>
+  <title>Sistem Absensi Murid - v2.63</title>
   <link rel="manifest" href="./manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1308,7 +1308,7 @@
             nilai: timeSettingsToSave[k]
           }));
           await supabaseClient.from('pengaturan_waktu').upsert(settingsArray);
-          alert("Pengaturan jam tersimpan di Supabase!");
+          alert("Pengaturan jam tersimpan di Server!");
         } catch (e) { alert("Pengaturan tersimpan lokal."); }
       } else alert("Perangkat offline. Tersimpan di HP ini.");
     }
@@ -1445,7 +1445,7 @@
         renderDashboardView();
 
       } catch (e) {
-        console.error("Gagal memuat data dari Supabase:", e);
+        console.error("Gagal memuat data dari Server:", e);
         loadLocalHistoryToMemory();
       }
     }
@@ -1695,9 +1695,9 @@
                 });
 
               if (!error) {
-                alert("Perubahan data siswa berhasil disimpan ke Supabase!");
+                alert("Perubahan data siswa berhasil disimpan ke Server!");
               } else {
-                alert("Gagal memperbarui Supabase: " + error.message);
+                alert("Gagal memperbarui Server: " + error.message);
               }
             } catch (e) {
               alert("Data tersimpan lokal.");
@@ -2847,15 +2847,15 @@
           tx.oncomplete = () => {
             updateQueueCountUI();
             document.getElementById("sync-info-text").innerText = "Berhasil terkirim ke Server!";
-            alert(`Berhasil mengirim ${queueData.length} data presensi ke Supabase!`);
+            alert(`Berhasil mengirim ${queueData.length} data presensi ke Server!`);
           };
         } else {
-          console.error("Supabase Error:", error);
-          alert("Gagal mengirim ke Supabase: " + error.message);
+          console.error("Server Error:", error);
+          alert("Gagal mengirim ke Server: " + error.message);
           document.getElementById("sync-info-text").innerText = "Gagal sinkron. Cek RLS / Koneksi.";
         }
       } catch (e) {
-        console.error("Gagal sinkron ke Supabase:", e);
+        console.error("Gagal sinkron ke Server:", e);
         alert("Terjadi kesalahan saat pengiriman data.");
       }
     }
