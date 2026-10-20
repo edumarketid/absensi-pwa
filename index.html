@@ -2901,8 +2901,7 @@
           tx.oncomplete = () => {
             updateQueueCountUI();
             document.getElementById("sync-info-text").innerText = "Berhasil terkirim ke Server!";
-            alert(`Berhasil mengirim ${queueData.length} data presensi ke Server!`);
-          };
+            };
         } else {
           console.error("Server Error:", error);
           alert("Gagal mengirim ke Server: " + error.message);
