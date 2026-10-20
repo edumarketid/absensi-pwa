@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b3c5d">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Sistem Absensi Murid - v2.62 Supabase Engine</title>
+  <title>Sistem Absensi Murid - v2.63 Supabase Engine</title>
   <link rel="manifest" href="./manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -38,7 +38,7 @@
             <span id="status-text" class="text-xs font-semibold">Memeriksa...</span>
           </div>
           <div class="flex items-center justify-end gap-1 mt-0.5">
-            <span id="app-version-tag" class="text-[10px] font-mono text-emerald-300 bg-emerald-950/60 px-1.5 py-0.2 rounded-md border border-emerald-500/30">v2.62</span>
+            <span id="app-version-tag" class="text-[10px] font-mono text-emerald-300 bg-emerald-950/60 px-1.5 py-0.2 rounded-md border border-emerald-500/30">v2.63</span>
             <span id="app-role-badge" onclick="handleRoleBadgeClick()" class="text-[10px] font-bold text-amber-300 bg-amber-950/60 px-1.5 py-0.2 rounded-md border border-amber-500/30 cursor-pointer select-none">PETUGAS</span>
           </div>
         </div>
@@ -1126,7 +1126,17 @@
 
         if (navigator.onLine) {
           try {
-            const { error } = await supabaseClient.from('siswa').upsert(parsedBatchStudents);
+            const mappedForSupabase = parsedBatchStudents.map(s => ({
+              ID_SISWA: s.id_siswa,
+              NISN: s.nisn,
+              NAMA_SISWA: s.nama,
+              KELAS: s.kelas,
+              TTL: s.ttl,
+              STATUS: s.active ? 'Aktif' : 'Non-Aktif',
+              QR_CODE_KEY: s.id_siswa
+            }));
+
+            const { error } = await supabaseClient.from('siswa').upsert(mappedForSupabase);
             if (!error) {
               alert("Data siswa kolektif berhasil disimpan ke Supabase!");
             } else {
@@ -1146,30 +1156,6 @@
         parsedBatchStudents = [];
         toggleView('students');
       };
-    }
-
-    async function uploadLogoToSupabase(fileInputId, fileNamePrefix) {
-      const fileInput = document.getElementById(fileInputId);
-      const file = fileInput.files[0];
-      if (!file) return null;
-
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${fileNamePrefix}_${Date.now()}.${fileExt}`;
-
-      const { data, error } = await supabaseClient.storage
-        .from('media-sekolah')
-        .upload(filePath, file);
-
-      if (error) {
-        alert("Gagal mengunggah logo: " + error.message);
-        return null;
-      }
-
-      const { data: publicUrlData } = supabaseClient.storage
-        .from('media-sekolah')
-        .getPublicUrl(filePath);
-
-      return publicUrlData.publicUrl;
     }
 
     async function renderTimeSettingsSummary() {
@@ -1347,7 +1333,7 @@
         const { data: attendanceData } = await supabaseClient
           .from('absensi_harian')
           .select('*')
-          .eq('tanggal', targetDateStr);
+          .eq('TANGGAL', targetDateStr);
 
         const { data: timeData } = await supabaseClient.from('pengaturan_waktu').select('*');
         if (timeData) {
@@ -1368,10 +1354,19 @@
         }
 
         if (studentsData) {
+          const normalizedStudents = studentsData.map(s => ({
+            id_siswa: s.ID_SISWA || s.id_siswa,
+            nisn: s.NISN || s.nisn || "-",
+            nama: s.NAMA_SISWA || s.nama,
+            kelas: s.KELAS || s.kelas,
+            ttl: s.TTL || s.ttl || "-",
+            active: s.STATUS ? (s.STATUS === 'Aktif') : (s.active !== undefined ? s.active : true)
+          }));
+
           const tx = db.transaction("students", "readwrite");
           const store = tx.objectStore("students");
           store.clear();
-          studentsData.forEach(s => store.put(s));
+          normalizedStudents.forEach(s => store.put(s));
           tx.oncomplete = () => {
             loadStudentsView();
             updateMonitoringDashboard();
@@ -1380,7 +1375,19 @@
         }
 
         if (attendanceData) {
-          fetchedTodayAttendance = attendanceData;
+          fetchedTodayAttendance = attendanceData.map(a => ({
+            queue_id: a.LOG_ID || `${a.TANGGAL}_${a.ID_SISWA}`,
+            tanggal: a.TANGGAL,
+            id_siswa: a.ID_SISWA,
+            nama: a.NAMA_SISWA,
+            kelas: a.KELAS,
+            jam_pagi: a.JAM_PAGI,
+            status_pagi: a.STATUS_PAGI,
+            jam_siang: a.JAM_SIANG,
+            status_siang: a.STATUS_SIANG,
+            status_akhir: a.STATUS_AKHIR,
+            status_presensi: a.STATUS_AKHIR
+          }));
         }
       } catch (e) {
         loadLocalHistoryToMemory();
@@ -1622,12 +1629,13 @@
               const { error } = await supabaseClient
                 .from('siswa')
                 .upsert({
-                  id_siswa: std.id_siswa,
-                  nama: std.nama,
-                  nisn: std.nisn,
-                  kelas: std.kelas,
-                  ttl: std.ttl,
-                  active: std.active
+                  ID_SISWA: std.id_siswa,
+                  NAMA_SISWA: std.nama,
+                  NISN: std.nisn,
+                  KELAS: std.kelas,
+                  TTL: std.ttl,
+                  STATUS: std.active ? 'Aktif' : 'Non-Aktif',
+                  QR_CODE_KEY: std.id_siswa
                 });
 
               if (!error) {
@@ -2008,7 +2016,6 @@
       container.innerHTML = studentItems.map(item => {
         const std = item.student;
         const st = item.status;
-        const isAbsented = item.isAbsented;
         
         let badgeStyle = "bg-gray-100 text-gray-700";
         if (st === "HADIR") badgeStyle = "bg-emerald-100 text-emerald-800";
@@ -2375,7 +2382,7 @@
       const container = document.getElementById("hari-libur-list-container");
       container.innerHTML = fetchedHariLiburList.map(item => `
         <div class="bg-white p-3 rounded-xl border border-gray-200 flex items-center justify-between text-xs">
-          <div><span class="font-bold text-blue-900 block">${item.tanggal}</span><span>${item.keterangan}</span></div>
+          <div><span class="font-bold text-blue-900 block">${item.tanggal || item.TANGGAL}</span><span>${item.keterangan || item.KETERANGAN_LIBUR}</span></div>
         </div>
       `).join('');
     }
@@ -2385,7 +2392,7 @@
       const ket = document.getElementById("input-libur-ket").value.trim();
       if (!tgl || !ket) return alert("Tanggal & Keterangan wajib diisi!");
       
-      const newItem = { tanggal: formatCleanDateLocal(tgl), keterangan: ket };
+      const newItem = { TANGGAL: formatCleanDateLocal(tgl), KETERANGAN_LIBUR: ket };
       fetchedHariLiburList.push(newItem);
       localStorage.setItem("CACHE_HARI_LIBUR", JSON.stringify(fetchedHariLiburList));
       renderHariLiburView();
@@ -2430,8 +2437,6 @@
 
       if (!confirm(`Yakin memindahkan ${targetStudents.length} siswa dari ${fromCls} ke ${toCls}?`)) return;
 
-      const updates = targetStudents.map(s => ({ id_siswa: s.id_siswa, kelas_baru: toCls }));
-      
       const tx = db.transaction("students", "readwrite");
       const store = tx.objectStore("students");
       targetStudents.forEach(s => {
@@ -2445,7 +2450,11 @@
       };
 
       if (navigator.onLine) {
-        const updatesData = updates.map(u => ({ id_siswa: u.id_siswa, kelas: u.kelas_baru }));
+        const updatesData = targetStudents.map(s => ({
+          ID_SISWA: s.id_siswa,
+          KELAS: toCls,
+          NAMA_SISWA: s.nama
+        }));
         await supabaseClient.from('siswa').upsert(updatesData);
         autoDownloadMasterStudents();
       }
@@ -2499,9 +2508,9 @@
       
       if (!idSiswa || !nama || !kelas) return alert("ID, Nama, dan Kelas Wajib diisi!");
 
-      const newStudent = { id_siswa: idSiswa, nisn: nisn || "-", nama: nama, kelas: kelas, ttl: ttl || "-", active: true };
+      const newStudentLocal = { id_siswa: idSiswa, nisn: nisn || "-", nama: nama, kelas: kelas, ttl: ttl || "-", active: true };
       const tx = db.transaction("students", "readwrite");
-      tx.objectStore("students").put(newStudent);
+      tx.objectStore("students").put(newStudentLocal);
       tx.oncomplete = async () => {
         alert("Siswa baru berhasil disimpan!");
         toggleAddStudentModal();
@@ -2509,7 +2518,16 @@
       };
 
       if (navigator.onLine) {
-        await supabaseClient.from('siswa').insert([newStudent]);
+        const newStudentSupabase = {
+          ID_SISWA: idSiswa,
+          NISN: nisn || "-",
+          NAMA_SISWA: nama,
+          KELAS: kelas,
+          TTL: ttl || "-",
+          STATUS: "Aktif",
+          QR_CODE_KEY: idSiswa
+        };
+        await supabaseClient.from('siswa').insert([newStudentSupabase]);
       }
     }
 
@@ -2729,7 +2747,20 @@
       if (queueData.length === 0) return;
 
       try {
-        const { error } = await supabaseClient.rpc('sync_attendance_batch', { payload: queueData });
+        const payload = queueData.map(q => ({
+          LOG_ID: `${q.tanggal}-${q.id_siswa}`,
+          TANGGAL: q.tanggal,
+          ID_SISWA: q.id_siswa,
+          NAMA_SISWA: q.nama,
+          KELAS: q.kelas,
+          JAM_PAGI: q.sesi === "PAGI" ? q.jam : null,
+          STATUS_PAGI: q.sesi === "PAGI" ? q.status_presensi : null,
+          JAM_SIANG: q.sesi === "SIANG" ? q.jam : null,
+          STATUS_SIANG: q.sesi === "SIANG" ? q.status_presensi : null,
+          STATUS_AKHIR: q.status_presensi
+        }));
+
+        const { error } = await supabaseClient.from('absensi_harian').upsert(payload);
 
         if (!error) {
           const tx = db.transaction("attendance_queue", "readwrite");
