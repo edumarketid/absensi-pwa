@@ -186,12 +186,12 @@ async function muatDataDanPengaturan() {
     document.getElementById('warna').value = s.WARNA_KARTU || 'biru';
     document.getElementById('bingkai').value = s.BINGKAI_KARTU || 'ganda';
 
-    // 3. Ambil Logo dari Storage Bucket 'media-sekolah'
+    // 3. Ambil Logo dari Storage Bucket 'media-sekolah' atau dari LocalStorage/Base64
     const { data: daerahData } = supabaseClient.storage.from('media-sekolah').getPublicUrl('logo_kiri.png');
     const { data: sekolahData } = supabaseClient.storage.from('media-sekolah').getPublicUrl('logo_kanan.png');
 
-    logoKiriData = daerahData ? daerahData.publicUrl + '?t=' + Date.now() : '';
-    logoKananData = sekolahData ? sekolahData.publicUrl + '?t=' + Date.now() : '';
+    logoKiriData = s.LOGO_KIRI_BASE64 || (daerahData ? daerahData.publicUrl + '?t=' + Date.now() : '');
+    logoKananData = s.LOGO_KANAN_BASE64 || (sekolahData ? sekolahData.publicUrl + '?t=' + Date.now() : '');
 
     showLogo('kiri', logoKiriData);
     showLogo('kanan', logoKananData);
@@ -202,6 +202,80 @@ async function muatDataDanPengaturan() {
 
   } catch(err) {
     setStatus('Error koneksi Supabase: ' + err.message, true);
+  }
+}
+
+function bacaLogo(ev, pos) {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  if (f.size > 2000000) { alert('Ukuran logo maksimal 2 MB.'); ev.target.value = ''; return; }
+  
+  if (pos === 'kiri') logoKiriFile = f;
+  else logoKananFile = f;
+
+  const r = new FileReader();
+  r.onload = () => {
+    if (pos === 'kiri') logoKiriData = r.result;
+    else logoKananData = r.result;
+    showLogo(pos, r.result);
+    buatPreview();
+  };
+  r.readAsDataURL(f);
+}
+
+function showLogo(pos, data) {
+  const el = document.getElementById(pos === 'kiri' ? 'prevKiri' : 'prevKanan');
+  if (data && data.trim() !== '') {
+    el.innerHTML = '<img src="' + data + '" style="max-height:80px; object-fit:contain;" onerror="this.onerror=null; this.parentElement.innerHTML=\'<span>Gagal memuat gambar</span>\';">';
+  } else {
+    el.innerHTML = '<span>Belum ada logo</span>';
+  }
+}
+
+async function simpanPengaturan() {
+  setStatus('Menyimpan pengaturan & mengunggah logo ke Supabase...');
+  try {
+    const schoolName = document.getElementById('namaSekolah').value.trim();
+    const warna = document.getElementById('warna').value;
+    const bingkai = document.getElementById('bingkai').value;
+
+    // 1. Simpan Teks Pengaturan & Data Logo Base64 ke Supabase agar tersimpan permanen
+    const settingsArray = [
+      { kunci: 'SCHOOL_NAME', nilai: schoolName },
+      { kunci: 'WARNA_KARTU', nilai: warna },
+      { kunci: 'BINGKAI_KARTU', nilai: bingkai }
+    ];
+
+    if (logoKiriData && logoKiriData.startsWith('data:image')) {
+      settingsArray.push({ kunci: 'LOGO_KIRI_BASE64', nilai: logoKiriData });
+    }
+    if (logoKananData && logoKananData.startsWith('data:image')) {
+      settingsArray.push({ kunci: 'LOGO_KANAN_BASE64', nilai: logoKananData });
+    }
+
+    await supabaseClient.from('pengaturan').upsert(settingsArray);
+    localStorage.setItem("SCHOOL_NAME", schoolName);
+
+    // 2. Unggah Logo Kiri ke Storage Bucket
+    if (logoKiriFile) {
+      await supabaseClient.storage
+        .from('media-sekolah')
+        .upload('logo_kiri.png', logoKiriFile, { upsert: true });
+    }
+
+    // 3. Unggah Logo Kanan ke Storage Bucket
+    if (logoKananFile) {
+      await supabaseClient.storage
+        .from('media-sekolah')
+        .upload('logo_kanan.png', logoKananFile, { upsert: true });
+    }
+
+    setStatus('Pengaturan & logo berhasil disimpan di Supabase!');
+    logoKiriFile = null;
+    logoKananFile = null;
+
+  } catch(e) {
+    setStatus('Gagal menyimpan: ' + e.message, true);
   }
 }
 
