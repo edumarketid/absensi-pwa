@@ -109,15 +109,25 @@
 
     async function fetchStudents() {
       try {
+        // Mengambil data siswa dari Supabase
         const { data, error } = await supabaseClient
           .from('siswa')
-          .select('*')
-          .eq('active', true)
-          .order('nama', { ascending: true });
+          .select('*');
 
         if (error) throw error;
 
-        allStudents = data || [];
+        // Normalisasi data agar fleksibel terhadap nama kolom huruf besar/kecil
+        allStudents = (data || [])
+          .filter(s => !s.STATUS || s.STATUS === 'Aktif' || s.active === true)
+          .map(s => ({
+            id_siswa: s.ID_SISWA || s.id_siswa,
+            nama: s.NAMA_SISWA || s.nama,
+            nisn: s.NISN || s.nisn || "-",
+            kelas: s.KELAS || s.kelas,
+            qr_code_key: s.QR_CODE_KEY || s.ID_SISWA || s.id_siswa
+          }))
+          .sort((a, b) => a.nama.localeCompare(b.nama));
+
         populateClassDropdown();
         renderCards();
       } catch (err) {
@@ -167,7 +177,7 @@
               </div>
               <div>
                 <span class="text-[7px] text-gray-400 block font-bold">NISN / ID:</span>
-                <p class="text-[10px] font-extrabold text-blue-900">${std.nisn || std.id_siswa}</p>
+                <p class="text-[10px] font-extrabold text-blue-900">${std.nisn !== '-' ? std.nisn : std.id_siswa}</p>
               </div>
               <div>
                 <span class="text-[7px] text-gray-400 block font-bold">KELAS:</span>
@@ -185,9 +195,9 @@
 
         container.appendChild(cardDiv);
 
-        // Generate QR Code menggunakan ID Siswa
+        // Generate QR Code menggunakan nilai QR_CODE_KEY / ID Siswa
         new QRCode(document.getElementById(`qrcode-${std.id_siswa}`), {
-          text: String(std.id_siswa).trim(),
+          text: String(std.qr_code_key || std.id_siswa).trim(),
           width: 68,
           height: 68,
           correctLevel: QRCode.CorrectLevel.H
