@@ -1300,7 +1300,7 @@
             nilai: timeSettingsToSave[k]
           }));
           await supabaseClient.from('pengaturan_waktu').upsert(settingsArray);
-          alert("Pengaturan jam tersimpan di Supabase!");
+          alert("Pengaturan jam tersimpan di Server!");
         } catch (e) { alert("Pengaturan tersimpan lokal."); }
       } else alert("Perangkat offline. Tersimpan di HP ini.");
     }
@@ -1445,7 +1445,7 @@
         renderDashboardView();
 
       } catch (e) {
-        console.error("Gagal memuat data dari Supabase:", e);
+        console.error("Gagal memuat data dari Server:", e);
         loadLocalHistoryToMemory();
       }
     }
@@ -1695,9 +1695,9 @@
                 });
 
               if (!error) {
-                alert("Perubahan data siswa berhasil disimpan ke Supabase!");
+                alert("Perubahan data siswa berhasil disimpan ke Server!");
               } else {
-                alert("Gagal memperbarui Supabase: " + error.message);
+                alert("Gagal memperbarui Server: " + error.message);
               }
             } catch (e) {
               alert("Data tersimpan lokal.");
@@ -2825,7 +2825,7 @@
           tx.oncomplete = () => updateQueueCountUI();
         }
       } catch (e) {
-        console.error("Gagal sinkron ke Supabase:", e);
+        console.error("Gagal sinkron ke Server:", e);
       }
     }
 
