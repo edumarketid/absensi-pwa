@@ -168,7 +168,7 @@ function escAttr(x){ return String(x == null ? '' : x).replace(/\\/g, '\\\\').re
 function setStatus(t, bad = false){ const e = document.getElementById('status'); e.textContent = t; e.style.color = bad ? '#b91c1c' : '#166534'; }
 
 async function muatDataDanPengaturan() {
-  setStatus('Memuat data siswa & pengaturan dari Supabase...');
+  setStatus('Memuat data siswa & pengaturan dari Server...');
   try {
     // 1. Ambil Data Siswa Aktif dari Supabase
     const { data: stdData, error: stdError } = await supabaseClient
@@ -223,10 +223,10 @@ async function muatDataDanPengaturan() {
 
     renderDaftar();
     buatPreview();
-    setStatus('Berhasil memuat ' + siswa.length + ' data siswa dari Supabase!');
+    setStatus('Berhasil memuat ' + siswa.length + ' data siswa dari Server!');
 
   } catch(err) {
-    setStatus('Error koneksi Supabase: ' + err.message, true);
+    setStatus('Error koneksi Server: ' + err.message, true);
   }
 }
 
@@ -280,7 +280,7 @@ function hapusLogo(pos) {
 }
 
 async function simpanPengaturan() {
-  setStatus('Menyimpan pengaturan ke Supabase...');
+  setStatus('Menyimpan pengaturan ke Server...');
   try {
     const schoolName = document.getElementById('namaSekolah').value.trim();
     const warna = document.getElementById('warna').value;
